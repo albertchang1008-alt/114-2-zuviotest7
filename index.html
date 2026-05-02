@@ -1,0 +1,1141 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>線上測驗</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+*{-webkit-tap-highlight-color:transparent;box-sizing:border-box;}
+body{
+  font-family:'Noto Sans TC',sans-serif;
+  background:#f4f6fb;
+  min-height:100vh;
+  -webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;
+  -webkit-touch-callout:none;
+}
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:99px;}
+
+/* ── animations ── */
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes shimmer{from{background-position:-200% 0}to{background-position:200% 0}}
+@keyframes scaleIn{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:scale(1)}}
+@keyframes warningPulse{0%,100%{background:rgba(220,38,38,.92)}50%{background:rgba(185,28,28,.98)}}
+
+.fade-up{animation:fadeUp .3s ease both}
+.fade-in{animation:fadeIn .25s ease both}
+.scale-in{animation:scaleIn .28s ease both}
+
+/* ── card ── */
+.card{background:#fff;border-radius:22px;box-shadow:0 2px 10px rgba(15,23,42,.07),0 12px 32px rgba(15,23,42,.04);}
+.card-sm{background:#fff;border-radius:14px;box-shadow:0 1px 4px rgba(15,23,42,.06);}
+
+/* ── inputs ── */
+.field{
+  width:100%;padding:13px 16px;border-radius:12px;
+  border:2px solid #e2e8f0;font-size:.95rem;font-family:inherit;
+  outline:none;transition:border-color .18s;background:#fff;
+}
+.field:focus{border-color:#ec4899;}
+
+/* ── buttons ── */
+.btn-primary{
+  width:100%;padding:14px;border-radius:13px;border:none;
+  background:linear-gradient(135deg,#f472b6,#ec4899);
+  color:#fff;font-weight:700;font-size:1rem;font-family:inherit;
+  cursor:pointer;transition:opacity .15s,transform .12s;
+  box-shadow:0 4px 15px rgba(236,72,153,.35);
+}
+.btn-primary:hover{opacity:.9;}
+.btn-primary:active{transform:scale(.98);}
+.btn-primary:disabled{opacity:.55;cursor:not-allowed;transform:none;}
+.btn-ocean{background:linear-gradient(135deg,#38bdf8,#0ea5e9);box-shadow:0 4px 15px rgba(14,165,233,.3);}
+
+/* ── option buttons ── */
+.opt-btn{
+  width:100%;text-align:left;padding:14px 18px;
+  border-radius:12px;border:2px solid #e2e8f0;
+  background:#fff;font-size:.95rem;font-weight:500;
+  color:#334155;cursor:pointer;transition:border-color .15s,background .15s,color .15s;
+  font-family:inherit;
+}
+.opt-btn:hover{border-color:#38bdf8;background:#f0f9ff;}
+.opt-btn.selected{border-color:#0ea5e9;background:#e0f2fe;color:#0369a1;}
+
+/* ── anti-cheat ── */
+.blur-protection{
+  filter:blur(20px)!important;-webkit-filter:blur(20px)!important;
+  pointer-events:none!important;user-select:none!important;transition:none!important;
+}
+#exam-canvas{position:fixed;inset:0;z-index:9999;pointer-events:none;display:none;}
+
+/* ── watermark ── */
+#wm-layer{
+  position:fixed;inset:0;overflow:hidden;opacity:.065;
+  mix-blend-mode:multiply;pointer-events:none;z-index:9990;display:none;
+}
+#wm-inner{
+  position:absolute;width:220vw;height:220vh;top:-60vh;left:-60vw;
+  display:flex;flex-wrap:wrap;transform:rotate(-32deg);gap:0;
+}
+
+/* ── monitoring badge ── */
+.mon-badge{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:4px 12px;border-radius:99px;
+  background:#fee2e2;color:#dc2626;font-size:.72rem;font-weight:700;
+}
+.mon-dot{width:7px;height:7px;border-radius:50%;background:#dc2626;animation:pulse-dot 1.1s infinite;}
+
+/* ── teacher dashboard ── */
+.dash-tab{
+  padding:8px 20px;border-radius:9px;font-size:.85rem;font-weight:700;
+  cursor:pointer;transition:all .15s;color:#64748b;border:none;background:transparent;
+  font-family:inherit;
+}
+.dash-tab.active{background:#ec4899;color:#fff;}
+.dash-tab:not(.active):hover{background:#fce7f3;color:#be185d;}
+
+.student-row{
+  display:grid;grid-template-columns:1fr 90px 100px 90px;
+  gap:0;padding:11px 16px;border-bottom:1px solid #f1f5f9;
+  align-items:center;transition:background .12s;font-size:.88rem;
+}
+.student-row:hover{background:#fafafa;}
+.student-row.header{
+  background:#f8fafc;font-weight:700;font-size:.78rem;
+  color:#94a3b8;letter-spacing:.06em;text-transform:uppercase;
+  position:sticky;top:0;z-index:2;
+}
+
+.status-pill{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:3px 10px;border-radius:99px;font-size:.75rem;font-weight:700;
+}
+.pill-done{background:#d1fae5;color:#059669;}
+.pill-pending{background:#fef3c7;color:#b45309;}
+.pill-absent{background:#f1f5f9;color:#94a3b8;}
+
+.progress-bar{height:7px;background:#f1f5f9;border-radius:99px;overflow:hidden;}
+.progress-fill{height:100%;background:linear-gradient(90deg,#f472b6,#ec4899);border-radius:99px;transition:width .7s ease;}
+
+.stat-box{
+  padding:18px 20px;border-radius:14px;border:2px solid #f1f5f9;
+  display:flex;flex-direction:column;gap:4px;transition:border-color .2s;
+}
+.stat-box:hover{border-color:#fce7f3;}
+
+/* ── hidden teacher trigger ── */
+#logo-trigger{cursor:default;user-select:none;}
+
+/* ── modal backdrop ── */
+.modal-backdrop{
+  position:fixed;inset:0;background:rgba(15,23,42,.5);
+  backdrop-filter:blur(4px);z-index:10000;
+  display:flex;align-items:center;justify-content:center;
+  animation:fadeIn .2s ease;
+}
+
+/* ── score circle ── */
+.score-circle{
+  width:140px;height:140px;border-radius:50%;
+  background:conic-gradient(#ec4899 0deg, #f1f5f9 0deg);
+  display:flex;align-items:center;justify-content:center;
+  position:relative;
+}
+.score-circle-inner{
+  width:110px;height:110px;border-radius:50%;background:#fff;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+}
+
+/* ── refresh spinner ── */
+.spinner{width:18px;height:18px;border:2.5px solid #fce7f3;border-top-color:#ec4899;border-radius:50%;animation:spin .8s linear infinite;display:inline-block;}
+
+/* ── violation count ── */
+.viol-chip{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:2px 8px;border-radius:6px;font-size:.75rem;font-weight:700;
+  background:#fee2e2;color:#dc2626;font-family:'JetBrains Mono',monospace;
+}
+</style>
+</head>
+<body>
+
+<!-- ── Anti-cheat canvas overlay ── -->
+<canvas id="exam-canvas"></canvas>
+
+<!-- ── Watermark layer ── -->
+<div id="wm-layer"><div id="wm-inner"></div></div>
+
+<!-- ── Teacher login modal ── -->
+<div id="teacher-modal" class="modal-backdrop" style="display:none;">
+  <div class="card p-8 w-full max-w-sm mx-4 scale-in">
+    <div class="flex items-center gap-3 mb-6">
+      <div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#f472b6,#ec4899);display:flex;align-items:center;justify-content:center;">
+        <svg width="20" height="20" fill="none" stroke="#fff" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      </div>
+      <div>
+        <h2 style="font-size:1.1rem;font-weight:900;color:#1e293b;">教師後台登入</h2>
+        <p style="font-size:.75rem;color:#94a3b8;">僅限授權人員</p>
+      </div>
+      <button onclick="closeTeacherModal()" style="margin-left:auto;color:#cbd5e1;font-size:1.3rem;background:none;border:none;cursor:pointer;line-height:1;">×</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div>
+        <label style="font-size:.8rem;font-weight:700;color:#475569;display:block;margin-bottom:5px;">帳號</label>
+        <input id="t-user" type="text" class="field" placeholder="請輸入帳號">
+      </div>
+      <div>
+        <label style="font-size:.8rem;font-weight:700;color:#475569;display:block;margin-bottom:5px;">密碼</label>
+        <input id="t-pass" type="password" class="field" placeholder="請輸入密碼" onkeydown="if(event.key==='Enter')doTeacherLogin()">
+      </div>
+      <div id="t-err" style="display:none;padding:10px 14px;border-radius:10px;background:#fee2e2;color:#dc2626;font-size:.82rem;font-weight:600;"></div>
+      <button onclick="doTeacherLogin()" class="btn-primary" style="margin-top:4px;">登入後台</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Teacher Dashboard ── -->
+<div id="dashboard-page" style="display:none;min-height:100vh;">
+  <!-- Top bar -->
+  <div style="background:#fff;border-bottom:1px solid #f1f5f9;padding:14px 24px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:100;box-shadow:0 1px 8px rgba(15,23,42,.06);">
+    <div style="width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#f472b6,#ec4899);flex-shrink:0;"></div>
+    <div>
+      <h1 style="font-size:1rem;font-weight:900;color:#1e293b;" id="dash-title">教師監控後台</h1>
+      <p style="font-size:.72rem;color:#94a3b8;" id="dash-teacher-name">載入中…</p>
+    </div>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:10px;">
+      <button onclick="refreshDashboard()" id="refresh-btn" style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:9px;border:2px solid #e2e8f0;background:#fff;font-size:.8rem;font-weight:700;color:#475569;cursor:pointer;font-family:inherit;transition:border-color .15s;" onmouseover="this.style.borderColor='#ec4899'" onmouseout="this.style.borderColor='#e2e8f0'">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        重新整理
+      </button>
+      <button onclick="logoutTeacher()" style="padding:8px 14px;border-radius:9px;border:2px solid #fee2e2;background:#fff;font-size:.8rem;font-weight:700;color:#dc2626;cursor:pointer;font-family:inherit;transition:all .15s;" onmouseover="this.style.background='#fee2e2'" onmouseout="this.style.background='#fff'">登出</button>
+    </div>
+  </div>
+
+  <div style="max-width:1100px;margin:0 auto;padding:24px 16px;">
+
+    <!-- Stats row -->
+    <div id="dash-stats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;">
+      <div class="stat-box">
+        <span style="font-size:.75rem;font-weight:700;color:#94a3b8;letter-spacing:.05em;">總學生數</span>
+        <span id="stat-total" style="font-size:2rem;font-weight:900;color:#1e293b;line-height:1.1;">–</span>
+      </div>
+      <div class="stat-box">
+        <span style="font-size:.75rem;font-weight:700;color:#059669;letter-spacing:.05em;">已完成</span>
+        <span id="stat-done" style="font-size:2rem;font-weight:900;color:#059669;line-height:1.1;">–</span>
+      </div>
+      <div class="stat-box">
+        <span style="font-size:.75rem;font-weight:700;color:#d97706;letter-spacing:.05em;">尚未作答</span>
+        <span id="stat-pending" style="font-size:2rem;font-weight:900;color:#d97706;line-height:1.1;">–</span>
+      </div>
+      <div class="stat-box">
+        <span style="font-size:.75rem;font-weight:700;color:#94a3b8;letter-spacing:.05em;">平均分數</span>
+        <span id="stat-avg" style="font-size:2rem;font-weight:900;color:#1e293b;line-height:1.1;">–</span>
+      </div>
+    </div>
+
+    <!-- Progress -->
+    <div class="card-sm" style="padding:16px 20px;margin-bottom:20px;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+        <span style="font-size:.82rem;font-weight:700;color:#475569;">作答進度</span>
+        <span id="stat-pct" style="font-size:.82rem;font-weight:700;color:#ec4899;">0%</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="dash-progress" style="width:0%"></div></div>
+    </div>
+
+    <!-- Class filter tabs -->
+    <div style="margin-bottom:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <span style="font-size:.8rem;font-weight:700;color:#94a3b8;">班級篩選：</span>
+      <div id="class-tabs" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+    </div>
+
+    <!-- Filter: show only pending -->
+    <div style="margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+      <input type="checkbox" id="show-pending-only" onchange="applyFilter()" style="width:16px;height:16px;accent-color:#ec4899;cursor:pointer;">
+      <label for="show-pending-only" style="font-size:.85rem;font-weight:600;color:#475569;cursor:pointer;">只顯示尚未作答</label>
+      <span style="margin-left:auto;font-size:.78rem;color:#94a3b8;" id="list-count"></span>
+    </div>
+
+    <!-- Student list -->
+    <div class="card" style="overflow:hidden;">
+      <div class="student-row header">
+        <span>學生姓名／學號</span>
+        <span style="text-align:center;">班級</span>
+        <span style="text-align:center;">狀態</span>
+        <span style="text-align:center;">分數</span>
+      </div>
+      <div id="student-list" style="max-height:520px;overflow-y:auto;">
+        <!-- rows injected by JS -->
+      </div>
+    </div>
+
+    <!-- Score distribution -->
+    <div class="card" style="padding:20px;margin-top:20px;">
+      <h3 style="font-size:.9rem;font-weight:800;color:#1e293b;margin-bottom:16px;">📊 已完成學生分數分布</h3>
+      <div id="score-chart" style="display:flex;align-items:flex-end;gap:6px;height:80px;">
+        <!-- bars injected by JS -->
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:6px;">
+        <span style="font-size:.7rem;color:#94a3b8;">0</span>
+        <span style="font-size:.7rem;color:#94a3b8;">10</span>
+        <span style="font-size:.7rem;color:#94a3b8;">20</span>
+        <span style="font-size:.7rem;color:#94a3b8;">30</span>
+        <span style="font-size:.7rem;color:#94a3b8;">40</span>
+        <span style="font-size:.7rem;color:#94a3b8;">50</span>
+        <span style="font-size:.7rem;color:#94a3b8;">60</span>
+        <span style="font-size:.7rem;color:#94a3b8;">70</span>
+        <span style="font-size:.7rem;color:#94a3b8;">80</span>
+        <span style="font-size:.7rem;color:#94a3b8;">90</span>
+        <span style="font-size:.7rem;color:#94a3b8;">100</span>
+      </div>
+    </div>
+
+    <p style="text-align:center;margin-top:20px;font-size:.75rem;color:#cbd5e1;" id="last-update-time"></p>
+  </div>
+</div>
+
+<!-- ── Student / Login pages ── -->
+<div id="app" class="w-full" style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;">
+  <div style="width:100%;max-width:640px;">
+
+    <!-- ===== LOGIN SECTION ===== -->
+    <section id="login-section" class="card p-8 sm:p-12 fade-up">
+      <!-- Logo – hidden teacher trigger (click 5x fast) -->
+      <div style="text-align:center;margin-bottom:8px;">
+        <div id="logo-trigger" onclick="handleLogoClick()" style="display:inline-flex;width:64px;height:64px;border-radius:16px;background:linear-gradient(135deg,#fce7f3,#fbcfe8);align-items:center;justify-content:center;margin-bottom:16px;">
+          <svg width="32" height="32" fill="none" stroke="#ec4899" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z"/>
+          </svg>
+        </div>
+        <h1 id="quiz-title" style="font-size:1.6rem;font-weight:900;color:#1e293b;margin-bottom:4px;">⏳ 載入中…</h1>
+        <p id="quiz-subtitle" style="font-size:.85rem;color:#94a3b8;">請稍候</p>
+      </div>
+
+      <form id="login-form" style="display:flex;flex-direction:column;gap:14px;margin-top:24px;">
+        <div>
+          <label style="font-size:.82rem;font-weight:700;color:#475569;display:block;margin-bottom:5px;">姓名</label>
+          <input type="text" id="student-name" class="field" required placeholder="請輸入真實姓名" autocomplete="off">
+        </div>
+        <div>
+          <label style="font-size:.82rem;font-weight:700;color:#475569;display:block;margin-bottom:5px;">學號</label>
+          <input type="text" id="student-id" class="field" required placeholder="請輸入學號" autocomplete="off">
+        </div>
+
+        <div id="login-err" style="display:none;padding:12px 14px;border-radius:11px;background:#fee2e2;color:#dc2626;font-size:.84rem;font-weight:600;"></div>
+
+        <!-- Consent -->
+        <div style="padding:14px;border-radius:12px;background:#fffbeb;border:1.5px solid #fde68a;display:flex;gap:10px;align-items:flex-start;">
+          <input type="checkbox" id="agree-cb" required style="width:16px;height:16px;margin-top:2px;flex-shrink:0;accent-color:#ec4899;cursor:pointer;">
+          <label for="agree-cb" style="font-size:.8rem;color:#92400e;line-height:1.5;cursor:pointer;">
+            <strong style="display:block;margin-bottom:2px;">⚠️ 測驗規範與監控告知</strong>
+            系統將自動偵測異常操作（切換分頁、截圖、分割畫面等），並記錄作答行為。您的身份將顯示為防盜浮水印。勾選即表示同意。
+          </label>
+        </div>
+
+        <button type="submit" id="btn-login" disabled class="btn-primary" style="margin-top:4px;opacity:.5;cursor:not-allowed;">
+          ⏳ 連線至題庫中…
+        </button>
+      </form>
+    </section>
+
+    <!-- ===== QUIZ SECTION ===== -->
+    <section id="quiz-section" style="display:none;" class="card fade-up">
+      <!-- Header -->
+      <div style="padding:16px 20px;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center;border-radius:22px 22px 0 0;background:#fafafa;">
+        <span class="mon-badge"><span class="mon-dot"></span>系統監控中</span>
+        <span style="font-size:.85rem;font-weight:700;color:#64748b;">共 <span id="q-total" style="color:#ec4899;font-size:1.1rem;font-weight:900;">–</span> 題</span>
+      </div>
+
+      <!-- Questions container -->
+      <div id="questions-wrap" style="padding:24px;max-height:68vh;overflow-y:auto;"></div>
+
+      <!-- Submit -->
+      <div style="padding:16px 20px;border-top:1px solid #f1f5f9;border-radius:0 0 22px 22px;background:#fafafa;">
+        <button id="btn-submit" onclick="submitQuiz()" class="btn-primary">確認交卷</button>
+      </div>
+    </section>
+
+    <!-- ===== RESULT SECTION ===== -->
+    <section id="result-section" style="display:none;" class="card p-8 sm:p-10 fade-up" style="text-align:center;">
+      <div style="text-align:center;">
+        <span style="display:inline-block;padding:4px 14px;border-radius:99px;background:#f1f5f9;font-size:.78rem;font-weight:700;color:#64748b;margin-bottom:16px;">測驗已結束</span>
+        <p id="res-id" style="font-size:.9rem;color:#94a3b8;margin-bottom:4px;"></p>
+        <h1 id="res-name" style="font-size:2.8rem;font-weight:900;color:#1e293b;margin-bottom:20px;"></h1>
+
+        <!-- Score circle -->
+        <div id="score-circle" class="score-circle" style="margin:0 auto 20px;width:140px;height:140px;border-radius:50%;display:flex;align-items:center;justify-content:center;position:relative;">
+          <div class="score-circle-inner">
+            <span id="res-score" style="font-size:2.6rem;font-weight:900;color:#ec4899;line-height:1;"></span>
+            <span style="font-size:.8rem;color:#94a3b8;font-weight:700;">分</span>
+          </div>
+        </div>
+
+        <p id="res-msg" style="font-size:1.2rem;font-weight:800;color:#1e293b;margin-bottom:6px;"></p>
+        <p style="font-size:.88rem;color:#64748b;">
+          答對 <span id="res-correct" style="color:#059669;font-weight:800;"></span> 題 ／ 答錯 <span id="res-wrong" style="color:#dc2626;font-weight:800;"></span> 題
+        </p>
+        <p style="font-size:.85rem;color:#94a3b8;margin-top:6px;">
+          異常紀錄：<span id="res-violations" style="font-weight:700;color:#dc2626;"></span>
+        </p>
+        <p id="upload-status" style="font-size:.8rem;font-weight:700;margin-top:14px;min-height:20px;color:#94a3b8;"></p>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<script>
+// ======================================================
+//  CONFIG
+// ======================================================
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzTQBpsG15HzacqW5N1nUWI291P5DfxyJZHJ0AWnbF81ODolYVLwSGy0E3cejYeS1ji/exec';
+
+// ======================================================
+//  SECURITY TOKEN
+//  產生一次性 session token 防止重複提交
+// ======================================================
+const SESSION_TOKEN = (() => {
+  const arr = new Uint8Array(16);
+  crypto.getRandomValues(arr);
+  return Array.from(arr).map(b => b.toString(16).padStart(2,'0')).join('');
+})();
+
+// ======================================================
+//  STATE
+// ======================================================
+let validStudents = [], questionDB = [];
+const state = {
+  quizName:'', maxAttempts:1,
+  studentName:'', studentId:'', studentClass:'',
+  questions:[], answers:[],
+  violations:[], violStartTime:0,
+  ipAddr:'未知', os:'未知',
+  startTime:'', submitTime:'',
+  submitted:false, isSubmitting:false,
+  sessionToken: SESSION_TOKEN
+};
+
+// Teacher state
+let teacherData = { name:'', classes:[], students:[], scores:[] };
+let activeClass = 'ALL';
+
+// ======================================================
+//  HIDDEN TEACHER TRIGGER  (click logo 5× within 3s)
+// ======================================================
+let logoClickCount = 0, logoClickTimer = null;
+function handleLogoClick() {
+  logoClickCount++;
+  if (logoClickTimer) clearTimeout(logoClickTimer);
+  logoClickTimer = setTimeout(() => { logoClickCount = 0; }, 3000);
+  if (logoClickCount >= 5) {
+    logoClickCount = 0;
+    clearTimeout(logoClickTimer);
+    openTeacherModal();
+  }
+}
+function openTeacherModal() {
+  document.getElementById('teacher-modal').style.display = 'flex';
+  document.getElementById('t-user').value = '';
+  document.getElementById('t-pass').value = '';
+  document.getElementById('t-err').style.display = 'none';
+  setTimeout(() => document.getElementById('t-user').focus(), 100);
+}
+function closeTeacherModal() {
+  document.getElementById('teacher-modal').style.display = 'none';
+}
+
+// ======================================================
+//  TEACHER LOGIN
+// ======================================================
+async function doTeacherLogin() {
+  const u = document.getElementById('t-user').value.trim();
+  const p = document.getElementById('t-pass').value.trim();
+  if (!u || !p) { showTeacherErr('請填寫帳號與密碼'); return; }
+
+  showTeacherErr('⏳ 驗證中…', '#475569');
+  try {
+    const url = `${SCRIPT_URL}?action=teacherLogin&user=${encodeURIComponent(u)}&pass=${encodeURIComponent(p)}`;
+    const res = await fetch(url, { redirect:'follow' });
+    const data = await res.json();
+    if (data.error) { showTeacherErr(data.error); return; }
+    if (!data.success) { showTeacherErr('❌ 帳號或密碼錯誤'); return; }
+
+    closeTeacherModal();
+    teacherData.name = data.teacherName || u;
+    await loadDashboard();
+  } catch(e) {
+    showTeacherErr('連線失敗，請稍後再試');
+  }
+}
+function showTeacherErr(msg, color='#dc2626') {
+  const el = document.getElementById('t-err');
+  el.textContent = msg;
+  el.style.color = color;
+  el.style.display = 'block';
+}
+
+// ======================================================
+//  TEACHER DASHBOARD
+// ======================================================
+async function loadDashboard() {
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('dashboard-page').style.display = 'block';
+  document.getElementById('dash-teacher-name').textContent = `登入者：${teacherData.name}`;
+  document.getElementById('dash-title').textContent = state.quizName || '教師監控後台';
+  await refreshDashboard();
+}
+
+async function refreshDashboard() {
+  const btn = document.getElementById('refresh-btn');
+  btn.innerHTML = '<span class="spinner"></span> 更新中…';
+  btn.disabled = true;
+
+  try {
+    const url = `${SCRIPT_URL}?action=getMonitor`;
+    const res = await fetch(url, { redirect:'follow' });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    teacherData.students = data.students || [];
+    teacherData.scores = data.scores || [];
+    teacherData.classes = [...new Set(
+      teacherData.students.map(s => s.class).filter(Boolean)
+    )].sort();
+
+    renderDashboard();
+  } catch(e) {
+    console.error(e);
+  } finally {
+    btn.innerHTML = '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> 重新整理';
+    btn.disabled = false;
+    document.getElementById('last-update-time').textContent = `最後更新：${new Date().toLocaleString('zh-TW',{hour12:false})}`;
+  }
+}
+
+function renderDashboard() {
+  // Build class tabs
+  const tabsEl = document.getElementById('class-tabs');
+  const classes = ['ALL', ...teacherData.classes];
+  tabsEl.innerHTML = classes.map(c => `
+    <button class="dash-tab ${c===activeClass?'active':''}" onclick="setClass('${c}')">
+      ${c==='ALL'?'全部班級':c}
+    </button>
+  `).join('');
+
+  applyFilter();
+}
+
+function setClass(cls) {
+  activeClass = cls;
+  // re-render tabs
+  document.querySelectorAll('.dash-tab').forEach(btn => {
+    btn.classList.toggle('active', (btn.textContent.trim() === (cls==='ALL'?'全部班級':cls)));
+  });
+  applyFilter();
+}
+
+function applyFilter() {
+  const pendingOnly = document.getElementById('show-pending-only').checked;
+  const scoreMap = {};
+  teacherData.scores.forEach(s => { scoreMap[s.studentId] = s; });
+
+  let students = teacherData.students;
+  if (activeClass !== 'ALL') students = students.filter(s => s.class === activeClass);
+  if (pendingOnly) students = students.filter(s => !scoreMap[s.id]);
+
+  // Stats
+  const filtered = (activeClass==='ALL') ? teacherData.students : teacherData.students.filter(s=>s.class===activeClass);
+  const total = filtered.length;
+  const done = filtered.filter(s => scoreMap[s.id]).length;
+  const pending = total - done;
+  const scores = filtered.filter(s => scoreMap[s.id]).map(s => scoreMap[s.id].score);
+  const avg = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length) : '–';
+  const pct = total ? Math.round(done/total*100) : 0;
+
+  document.getElementById('stat-total').textContent = total;
+  document.getElementById('stat-done').textContent = done;
+  document.getElementById('stat-pending').textContent = pending;
+  document.getElementById('stat-avg').textContent = scores.length ? avg+'分' : '–';
+  document.getElementById('stat-pct').textContent = pct+'%';
+  document.getElementById('dash-progress').style.width = pct+'%';
+  document.getElementById('list-count').textContent = `顯示 ${students.length} / ${total} 位`;
+
+  // Render rows
+  const list = document.getElementById('student-list');
+  if (students.length === 0) {
+    list.innerHTML = '<div style="padding:32px;text-align:center;color:#94a3b8;font-size:.9rem;">沒有符合條件的學生</div>';
+  } else {
+    list.innerHTML = students.map(s => {
+      const sc = scoreMap[s.id];
+      const statusHtml = sc
+        ? `<span class="status-pill pill-done">✓ 已完成</span>`
+        : `<span class="status-pill pill-pending">⏳ 未作答</span>`;
+      const scoreHtml = sc
+        ? `<span style="font-weight:700;color:${sc.score>=60?'#059669':'#dc2626'};font-family:'JetBrains Mono',monospace;">${sc.score}</span>`
+        : `<span style="color:#cbd5e1;">–</span>`;
+      const violHtml = sc && sc.violations && sc.violations !== '0'
+        ? `<span class="viol-chip">⚠${sc.violations}</span>`
+        : '';
+
+      return `
+        <div class="student-row">
+          <div>
+            <div style="font-weight:700;color:#1e293b;font-size:.88rem;">${s.name} ${violHtml}</div>
+            <div style="font-size:.75rem;color:#94a3b8;font-family:'JetBrains Mono',monospace;">${s.id}</div>
+            ${sc ? `<div style="font-size:.72rem;color:#b0b8c5;margin-top:1px;">${sc.submitTime||''}</div>` : ''}
+          </div>
+          <div style="text-align:center;font-size:.82rem;font-weight:600;color:#475569;">${s.class||'–'}</div>
+          <div style="text-align:center;">${statusHtml}</div>
+          <div style="text-align:center;">${scoreHtml}</div>
+        </div>`;
+    }).join('');
+  }
+
+  // Score distribution chart
+  renderScoreChart(teacherData.students.filter(s=>s.class===activeClass||activeClass==='ALL').map(s=>scoreMap[s.id]).filter(Boolean).map(s=>s.score));
+}
+
+function renderScoreChart(scores) {
+  const buckets = new Array(10).fill(0); // 0-9, 10-19 … 90-100
+  scores.forEach(s => {
+    const i = Math.min(9, Math.floor(s / 10));
+    buckets[i]++;
+  });
+  const maxVal = Math.max(...buckets, 1);
+  const chart = document.getElementById('score-chart');
+  const colors = ['#fca5a5','#fca5a5','#fca5a5','#fde68a','#fde68a','#fde68a','#6ee7b7','#34d399','#10b981','#059669'];
+  chart.innerHTML = buckets.map((v,i) => `
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;">
+      <span style="font-size:.65rem;color:#94a3b8;font-weight:700;">${v||''}</span>
+      <div style="width:100%;border-radius:5px 5px 0 0;background:${colors[i]};height:${v?Math.max(8,v/maxVal*64):4}px;opacity:${v?1:.25};transition:height .4s ease;"></div>
+    </div>
+  `).join('');
+}
+
+function logoutTeacher() {
+  teacherData = { name:'', classes:[], students:[], scores:[] };
+  activeClass = 'ALL';
+  document.getElementById('dashboard-page').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+}
+
+// ======================================================
+//  ANTI-CHEAT MONITOR
+// ======================================================
+class ExamMonitor {
+  constructor(onViolation) {
+    this.active = false;
+    this.onViolation = onViolation;
+    this.canvas = document.getElementById('exam-canvas');
+    this.ctx = this.canvas.getContext('2d');
+    this.app = document.getElementById('app');
+    this.isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+    this.lastTime = 0;
+    this.rafId = null;
+    this.focusFrames = 0;
+    this.blurTimer = null;
+    this.warningVisible = false;
+    this.violStartTime = 0;
+    this.currentReason = '';
+    this.baseWidth = window.innerWidth;
+    this.baseScreenWidth = window.screen.width;
+
+    this._blur = this._blur.bind(this);
+    this._resume = this._resume.bind(this);
+    this._resize = this._resize.bind(this);
+    this._beat = this._beat.bind(this);
+    this._visibility = this._visibility.bind(this);
+    this._pageHide = this._pageHide.bind(this);
+    this._touchCancel = this._touchCancel.bind(this);
+
+    // Screenshot detection: listen for printscreen key
+    this._keydown = (e) => {
+      if (e.key === 'PrintScreen' || (e.metaKey && e.shiftKey && (e.key==='3'||e.key==='4'||e.key==='5'))) {
+        this.violStartTime = Date.now();
+        this._trigger('按下截圖快捷鍵');
+      }
+    };
+    // Prevent right-click
+    this._contextmenu = (e) => e.preventDefault();
+    // Prevent keyboard shortcuts that reveal content
+    this._keypreventer = (e) => {
+      if ((e.ctrlKey||e.metaKey) && ['c','v','a','p','s','u'].includes(e.key.toLowerCase())) {
+        e.preventDefault();
+      }
+      // Block F12 devtools
+      if (e.key === 'F12') e.preventDefault();
+    };
+  }
+
+  start() {
+    if (this.active) return;
+    this.active = true;
+    this.lastTime = Date.now();
+    this.baseWidth = window.innerWidth;
+    this.focusFrames = 0;
+    this.violStartTime = 0;
+
+    window.addEventListener('blur', this._blur);
+    window.addEventListener('focus', this._resume);
+    window.addEventListener('resize', this._resize);
+    document.addEventListener('visibilitychange', this._visibility);
+    window.addEventListener('pagehide', this._pageHide);
+    window.addEventListener('pageshow', this._resume);
+    window.addEventListener('touchstart', this._resume);
+    window.addEventListener('mousedown', this._resume);
+    window.addEventListener('touchcancel', this._touchCancel);
+    document.addEventListener('keydown', this._keydown);
+    document.addEventListener('contextmenu', this._contextmenu);
+    document.addEventListener('keydown', this._keypreventer);
+
+    // DevTools detection: window size diff
+    this._devToolsInterval = setInterval(() => {
+      if (window.outerWidth - window.innerWidth > 200 || window.outerHeight - window.innerHeight > 200) {
+        if (!this.warningVisible) {
+          this.violStartTime = Date.now();
+          this._trigger('疑似開啟開發者工具');
+        }
+      }
+    }, 2000);
+
+    this.rafId = requestAnimationFrame(this._beat);
+  }
+
+  stop() {
+    this.active = false;
+    window.removeEventListener('blur', this._blur);
+    window.removeEventListener('focus', this._resume);
+    window.removeEventListener('resize', this._resize);
+    document.removeEventListener('visibilitychange', this._visibility);
+    window.removeEventListener('pagehide', this._pageHide);
+    window.removeEventListener('pageshow', this._resume);
+    window.removeEventListener('touchstart', this._resume);
+    window.removeEventListener('mousedown', this._resume);
+    window.removeEventListener('touchcancel', this._touchCancel);
+    document.removeEventListener('keydown', this._keydown);
+    document.removeEventListener('contextmenu', this._contextmenu);
+    document.removeEventListener('keydown', this._keypreventer);
+    if (this._devToolsInterval) clearInterval(this._devToolsInterval);
+    if (this.blurTimer) clearTimeout(this.blurTimer);
+    if (this.rafId) cancelAnimationFrame(this.rafId);
+    this.app.classList.remove('blur-protection');
+  }
+
+  _beat() {
+    if (!this.active) return;
+    const now = Date.now();
+    if (now - this.lastTime > 900 && !this.warningVisible) {
+      this.violStartTime = this.lastTime;
+      this._trigger('系統凍結（疑似截圖/多工）');
+    } else if (!document.hasFocus() && !this.warningVisible) {
+      this.app.classList.add('blur-protection');
+      if (this.focusFrames === 0) this.violStartTime = Date.now();
+      this.focusFrames++;
+      if (this.focusFrames > 30) this._trigger('失去焦點（多工/切換 App）');
+    } else if (document.hasFocus()) {
+      this.focusFrames = 0;
+    }
+    if (!this.warningVisible) this.lastTime = now;
+    this.rafId = requestAnimationFrame(this._beat);
+  }
+
+  _blur() {
+    if (!this.active || this.warningVisible) return;
+    this.app.classList.add('blur-protection');
+    if (this.blurTimer) return;
+    this.violStartTime = Date.now();
+    this.blurTimer = setTimeout(() => {
+      this.blurTimer = null;
+      if (!document.hasFocus()) this._trigger('切換視窗/離開頁面');
+    }, 600);
+  }
+
+  _resume() {
+    if (!this.active || this.warningVisible || document.hidden) return;
+    this.app.classList.remove('blur-protection');
+    if (this.blurTimer) { clearTimeout(this.blurTimer); this.blurTimer = null; }
+    this.focusFrames = 0;
+  }
+
+  _resize() {
+    if (!this.active || this.warningVisible) return;
+    if (this.isMobile && Math.abs(window.innerWidth - this.baseWidth) > 80) {
+      this.violStartTime = Date.now();
+      this._trigger('分割畫面（多工）');
+      this.baseWidth = window.innerWidth;
+    } else {
+      this.baseWidth = window.innerWidth;
+    }
+  }
+
+  _visibility() {
+    if (document.hidden && this.active && !this.warningVisible) {
+      this.app.classList.add('blur-protection');
+      this.violStartTime = Date.now();
+      this._trigger('切換至背景/其他 App');
+    }
+  }
+
+  _pageHide() {
+    if (!this.active || this.warningVisible) return;
+    this.app.classList.add('blur-protection');
+    this.violStartTime = Date.now();
+    this._trigger('退至背景或切換 App');
+  }
+
+  _touchCancel() {
+    if (!this.active || this.warningVisible) return;
+    this.app.classList.add('blur-protection');
+    if (this.blurTimer) return;
+    this.violStartTime = Date.now();
+    this.blurTimer = setTimeout(() => {
+      this.blurTimer = null;
+      this._trigger('系統手勢/AI 輔助介入');
+    }, 900);
+  }
+
+  _trigger(reason) {
+    this.warningVisible = true;
+    this.currentReason = reason;
+    this._drawWarning(reason);
+  }
+
+  _drawWarning(reason) {
+    this.canvas.width = window.innerWidth;
+    this.canvas.height = window.innerHeight;
+    this.canvas.style.display = 'block';
+    this.canvas.style.pointerEvents = 'auto';
+
+    const ctx = this.ctx;
+    ctx.fillStyle = 'rgba(220,38,38,.93)';
+    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const cx = this.canvas.width/2, cy = this.canvas.height/2;
+
+    ctx.font = `bold ${Math.min(28,this.canvas.width/14)}px "Noto Sans TC", sans-serif`;
+    ctx.fillStyle = '#fff';
+    ctx.fillText('⚠️  系統偵測到異常操作！', cx, cy-44);
+
+    ctx.font = `bold ${Math.min(22,this.canvas.width/18)}px "Noto Sans TC", sans-serif`;
+    ctx.fillStyle = '#fde68a';
+    ctx.fillText(`原因：${reason}`, cx, cy+4);
+
+    ctx.font = `${Math.min(16,this.canvas.width/24)}px "Noto Sans TC", sans-serif`;
+    ctx.fillStyle = 'rgba(255,255,255,.8)';
+    ctx.fillText('點擊任意處繼續測驗', cx, cy+56);
+
+    this.canvas.onclick = () => {
+      const sec = Math.max(1, Math.round((Date.now()-this.violStartTime)/1000));
+      this.onViolation(`${this.currentReason}(${sec}秒)`);
+      this.canvas.style.display = 'none';
+      this.canvas.style.pointerEvents = 'none';
+      this.app.classList.remove('blur-protection');
+      this.warningVisible = false;
+      this.lastTime = Date.now();
+      this.baseWidth = window.innerWidth;
+      this.focusFrames = 0;
+      this.violStartTime = 0;
+      if (this.blurTimer) { clearTimeout(this.blurTimer); this.blurTimer = null; }
+      this.canvas.onclick = null;
+    };
+  }
+}
+
+let monitor = null;
+
+// ======================================================
+//  UTILITIES
+// ======================================================
+function getOS() {
+  const ua = navigator.userAgent, p = navigator.platform;
+  if (/iPhone|iPad|iPod/.test(ua)||(p==='MacIntel'&&navigator.maxTouchPoints>1)) {
+    const m=ua.match(/OS (\d+[_.]\d+)/i);return 'iOS/iPadOS'+(m?' '+m[1].replace('_','.'):'');
+  }
+  if (/Macintosh/.test(p)){const m=ua.match(/Mac OS X (\d+[_.]\d+)/i);return 'macOS'+(m?' '+m[1].replace('_','.'):'');}
+  if (/Win/.test(p)){
+    const m=ua.match(/Windows NT (\d+\.\d+)/i);
+    const map={'10.0':' 10/11','6.3':' 8.1','6.2':' 8','6.1':' 7'};
+    return 'Windows'+(m?(map[m[1]]||' NT '+m[1]):'');
+  }
+  if (/Android/.test(ua)){const m=ua.match(/Android (\d+\.?\d*)/i);return 'Android'+(m?' '+m[1]:'');}
+  return '未知';
+}
+
+function shuffle(arr) {
+  const a=[...arr];
+  for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}
+  return a;
+}
+
+function formatViolations(arr) {
+  if (!arr.length) return '0';
+  const c={};arr.forEach(r=>{c[r]=(c[r]||0)+1;});
+  return arr.length+'（'+Object.entries(c).map(([r,n])=>`${n}次${r}`).join('，')+'）';
+}
+
+function show(id){ document.getElementById(id).style.display=''; }
+function hide(id){ document.getElementById(id).style.display='none'; }
+
+function switchTo(id) {
+  ['login-section','quiz-section','result-section'].forEach(s=>hide(s));
+  show(id);
+}
+
+// ======================================================
+//  WATERMARK
+// ======================================================
+function showWatermark() {
+  const inner = document.getElementById('wm-inner');
+  inner.innerHTML='';
+  const text=`${state.studentName}（${state.studentId}）`;
+  for(let i=0;i<70;i++){
+    const s=document.createElement('span');
+    s.style.cssText='font-size:1.6rem;font-weight:900;color:#1e293b;margin:12px 18px;white-space:nowrap;opacity:.9;';
+    s.textContent=text;
+    inner.appendChild(s);
+  }
+  document.getElementById('wm-layer').style.display='block';
+}
+
+// ======================================================
+//  QUIZ LOGIC
+// ======================================================
+function startQuiz() {
+  state.startTime = new Date().toLocaleString('zh-TW',{hour12:false});
+  state.questions = shuffle(questionDB);
+  state.answers = new Array(state.questions.length).fill(null);
+  state.violations = [];
+  state.submitted = false;
+
+  document.getElementById('q-total').textContent = state.questions.length;
+  renderQuestions();
+  switchTo('quiz-section');
+  showWatermark();
+
+  monitor = new ExamMonitor(reason => { state.violations.push(reason); });
+  monitor.start();
+}
+
+function renderQuestions() {
+  const wrap = document.getElementById('questions-wrap');
+  wrap.innerHTML='';
+  state.questions.forEach((q,qi)=>{
+    const block=document.createElement('div');
+    block.id=`qb-${qi}`;
+    block.style.cssText='margin-bottom:32px;padding-bottom:28px;border-bottom:1px solid #f1f5f9;';
+    if(qi===state.questions.length-1) block.style.borderBottom='none';
+
+    const titleRow=document.createElement('div');
+    titleRow.style.cssText='display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;';
+    const titleText=document.createElement('h2');
+    titleText.style.cssText='font-size:1.05rem;font-weight:800;color:#1e293b;line-height:1.5;';
+    titleText.textContent=`${qi+1}. ${q.q}`;
+    const hint=document.createElement('span');
+    hint.id=`hint-${qi}`;
+    hint.style.cssText='display:none;padding:3px 10px;border-radius:99px;background:#fee2e2;color:#dc2626;font-size:.73rem;font-weight:700;white-space:nowrap;flex-shrink:0;';
+    hint.textContent='⚠ 未作答';
+    titleRow.appendChild(titleText);
+    titleRow.appendChild(hint);
+    block.appendChild(titleRow);
+
+    const opts=document.createElement('div');
+    opts.style.cssText='display:flex;flex-direction:column;gap:8px;';
+
+    const shuffled=shuffle(q.o.map((txt,i)=>({txt,correct:i===q.a})));
+    shuffled.forEach(opt=>{
+      const btn=document.createElement('button');
+      btn.className='opt-btn';
+      btn.textContent=opt.txt;
+      btn.onclick=()=>{
+        opts.querySelectorAll('.opt-btn').forEach(b=>{b.classList.remove('selected');});
+        btn.classList.add('selected');
+        state.answers[qi]=opt.correct;
+        const b=document.getElementById(`qb-${qi}`);
+        b.style.background='';b.style.padding='';b.style.borderRadius='';b.style.border='';
+        document.getElementById(`hint-${qi}`).style.display='none';
+      };
+      opts.appendChild(btn);
+    });
+    block.appendChild(opts);
+    wrap.appendChild(block);
+  });
+}
+
+function submitQuiz() {
+  if(state.isSubmitting||state.submitted) return;
+
+  const unanswered=state.answers.map((a,i)=>a===null?i:-1).filter(i=>i>=0);
+  if(unanswered.length>0){
+    unanswered.forEach(i=>{
+      const b=document.getElementById(`qb-${i}`);
+      b.style.background='#fff5f5';b.style.padding='14px';b.style.borderRadius='12px';b.style.border='2px solid #fecaca';
+      document.getElementById(`hint-${i}`).style.display='inline-flex';
+    });
+    document.getElementById(`qb-${unanswered[0]}`).scrollIntoView({behavior:'smooth',block:'center'});
+    if(!confirm(`您還有 ${unanswered.length} 題未作答（已標示紅色）。\n確定要強制交卷嗎？`)) return;
+  }
+
+  monitor.stop();
+  document.getElementById('wm-layer').style.display='none';
+  state.submitTime=new Date().toLocaleString('zh-TW',{hour12:false});
+  state.isSubmitting=true;
+  state.submitted=true;
+
+  const btn=document.getElementById('btn-submit');
+  btn.disabled=true; btn.textContent='⏳ 成績結算中…';
+
+  state.correctCount=state.answers.filter(a=>a===true).length;
+  showResult();
+}
+
+function showResult() {
+  switchTo('result-section');
+  window.scrollTo(0,0);
+
+  const total=state.questions.length;
+  const score=Math.round(state.correctCount/total*100);
+  const wrong=total-state.correctCount;
+
+  // Animate score circle
+  const circle=document.getElementById('score-circle');
+  const deg=Math.round(score/100*360);
+  circle.style.background=`conic-gradient(#ec4899 ${deg}deg, #f1f5f9 ${deg}deg)`;
+
+  document.getElementById('res-name').textContent=state.studentName;
+  document.getElementById('res-id').textContent=state.studentId;
+  document.getElementById('res-score').textContent=score;
+  document.getElementById('res-correct').textContent=state.correctCount;
+  document.getElementById('res-wrong').textContent=wrong;
+  document.getElementById('res-violations').textContent=formatViolations(state.violations);
+
+  const msgs=['太棒了！🎉','表現優異！','繼續加油！','下次更好！'];
+  document.getElementById('res-msg').textContent=score>=90?msgs[0]:score>=70?msgs[1]:score>=60?msgs[2]:msgs[3];
+
+  uploadResult(score, total);
+}
+
+function uploadResult(score, total) {
+  const el=document.getElementById('upload-status');
+  el.textContent='⏳ 成績上傳中…'; el.style.color='#94a3b8';
+  if(!SCRIPT_URL){el.textContent='';return;}
+
+  fetch(SCRIPT_URL,{
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify({
+      studentName:state.studentName,
+      studentId:state.studentId,
+      studentClass:state.studentClass,
+      score,
+      correctCount:state.correctCount,
+      wrongCount:total-state.correctCount,
+      tabSwitchCount:formatViolations(state.violations),
+      ipAddress:state.ipAddr,
+      startTime:state.startTime,
+      submitTime:state.submitTime,
+      os:state.os,
+      sessionToken:state.sessionToken
+    })
+  })
+  .then(r=>r.json())
+  .then(d=>{
+    if(d.duplicate){
+      el.textContent='⚠️ 此 Session 已上傳過，防止重複提交';
+      el.style.color='#d97706';
+    } else {
+      el.textContent='✅ 成績已記錄至雲端';
+      el.style.color='#059669';
+    }
+  })
+  .catch(()=>{el.textContent='❌ 上傳失敗，請通知老師';el.style.color='#dc2626';});
+}
+
+// ======================================================
+//  INIT
+// ======================================================
+function initApp() {
+  state.os = getOS();
+
+  // Fetch IP
+  fetch('https://api.ipify.org?format=json').then(r=>r.json()).then(d=>state.ipAddr=d.ip).catch(()=>{});
+
+  // Load quiz data
+  if(SCRIPT_URL){
+    fetch(SCRIPT_URL,{redirect:'follow'})
+      .then(r=>{ if(!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then(data=>{
+        if(data.error) throw new Error(data.error);
+        validStudents = data.students||[];
+        questionDB    = data.questions||[];
+        state.quizName    = data.quizName||'測驗';
+        state.maxAttempts = data.maxAttempts||1;
+
+        document.title=state.quizName;
+        document.getElementById('quiz-title').textContent=state.quizName;
+        document.getElementById('quiz-subtitle').textContent=`身份驗證（限考 ${state.maxAttempts} 次）`;
+
+        const btn=document.getElementById('btn-login');
+        btn.textContent='開始測驗';
+        btn.disabled=false;
+        btn.style.opacity='1'; btn.style.cursor='pointer';
+      })
+      .catch(err=>{
+        document.getElementById('quiz-title').textContent='❌ 系統錯誤';
+        document.getElementById('quiz-subtitle').textContent='無法連線題庫';
+        const errEl=document.getElementById('login-err');
+        errEl.textContent=`連線失敗：${err.message}`;
+        errEl.style.display='block';
+      });
+  }
+
+  // Login form
+  document.getElementById('login-form').addEventListener('submit', e=>{
+    e.preventDefault();
+    const name=document.getElementById('student-name').value.trim();
+    const id=document.getElementById('student-id').value.trim();
+    const errEl=document.getElementById('login-err');
+
+    const student=validStudents.find(s=>s.id===id&&s.name===name);
+    if(!student){
+      errEl.textContent='❌ 學號或姓名不符，請重新確認！';
+      errEl.style.display='block'; return;
+    }
+    if(student.attempts>=state.maxAttempts){
+      errEl.textContent=`❌ 已達測驗次數上限（${state.maxAttempts} 次），無法再次進入。`;
+      errEl.style.display='block'; return;
+    }
+    errEl.style.display='none';
+    state.studentName=name;
+    state.studentId=id;
+    state.studentClass=student.class||'';
+    startQuiz();
+  });
+
+  // Agree checkbox enables button
+  document.getElementById('agree-cb').addEventListener('change', function(){
+    const btn=document.getElementById('btn-login');
+    btn.disabled=!this.checked;
+    btn.style.opacity=this.checked?'1':'.5';
+    btn.style.cursor=this.checked?'pointer':'not-allowed';
+  });
+
+  // Block copy/paste globally
+  document.addEventListener('copy', e=>e.preventDefault());
+  document.addEventListener('cut', e=>e.preventDefault());
+  document.addEventListener('contextmenu', e=>e.preventDefault());
+}
+
+initApp();
+</script>
+</body>
+</html>
