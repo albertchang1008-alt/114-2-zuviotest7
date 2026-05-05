@@ -396,7 +396,7 @@ body{
 // ======================================================
 //  CONFIG
 // ======================================================
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzTQBpsG15HzacqW5N1nUWI291P5DfxyJZHJ0AWnbF81ODolYVLwSGy0E3cejYeS1ji/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx2AriVnYtJ-2ZrNsGrK8mW9xHSTm2wvuEEYrV720JyZm4XMSRFNED6kcaTtk1x3jsx/exec';
 
 // ======================================================
 //  SECURITY TOKEN
@@ -687,7 +687,8 @@ class ExamMonitor {
     window.addEventListener('focus', this._resume);
     window.addEventListener('resize', this._resize);
     document.addEventListener('visibilitychange', this._visibility);
-    window.addEventListener('pagehide', this._pageHide);
+    // pagehide 與 visibilitychange 會重複，只保留 visibilitychange
+    // window.addEventListener('pagehide', this._pageHide);
     window.addEventListener('pageshow', this._resume);
     window.addEventListener('touchstart', this._resume);
     window.addEventListener('mousedown', this._resume);
@@ -696,15 +697,19 @@ class ExamMonitor {
     document.addEventListener('contextmenu', this._contextmenu);
     document.addEventListener('keydown', this._keypreventer);
 
-    // DevTools detection: window size diff
-    this._devToolsInterval = setInterval(() => {
-      if (window.outerWidth - window.innerWidth > 200 || window.outerHeight - window.innerHeight > 200) {
-        if (!this.warningVisible) {
+    // DevTools detection: 僅在「確定是桌機」且視窗差值極大時才觸發
+    // 手機上 outerWidth - innerWidth 本來就很大（系統 UI），所以手機完全不偵測
+    if (!this.isMobile) {
+      this._devToolsInterval = setInterval(() => {
+        const wDiff = window.outerWidth  - window.innerWidth;
+        const hDiff = window.outerHeight - window.innerHeight;
+        // 桌機門檻提高到 400px 才算（避免縮放視窗誤判）
+        if ((wDiff > 400 || hDiff > 400) && !this.warningVisible) {
           this.violStartTime = Date.now();
           this._trigger('疑似開啟開發者工具');
         }
-      }
-    }, 2000);
+      }, 3000);
+    }
 
     this.rafId = requestAnimationFrame(this._beat);
   }
@@ -715,7 +720,7 @@ class ExamMonitor {
     window.removeEventListener('focus', this._resume);
     window.removeEventListener('resize', this._resize);
     document.removeEventListener('visibilitychange', this._visibility);
-    window.removeEventListener('pagehide', this._pageHide);
+    // window.removeEventListener('pagehide', this._pageHide);
     window.removeEventListener('pageshow', this._resume);
     window.removeEventListener('touchstart', this._resume);
     window.removeEventListener('mousedown', this._resume);
@@ -752,10 +757,11 @@ class ExamMonitor {
     this.app.classList.add('blur-protection');
     if (this.blurTimer) return;
     this.violStartTime = Date.now();
+    // 1200ms 緩衝：手機鍵盤收起、系統通知都會短暫失焦，給足夠時間讓它自動恢復
     this.blurTimer = setTimeout(() => {
       this.blurTimer = null;
-      if (!document.hasFocus()) this._trigger('切換視窗/離開頁面');
-    }, 600);
+      if (!document.hasFocus() && !document.hidden) this._trigger('切換視窗/離開頁面');
+    }, 1200);
   }
 
   _resume() {
@@ -785,6 +791,7 @@ class ExamMonitor {
   }
 
   _pageHide() {
+    // pagehide 與 visibilitychange 常同時觸發，用 warningVisible 防重複
     if (!this.active || this.warningVisible) return;
     this.app.classList.add('blur-protection');
     this.violStartTime = Date.now();
@@ -796,10 +803,17 @@ class ExamMonitor {
     this.app.classList.add('blur-protection');
     if (this.blurTimer) return;
     this.violStartTime = Date.now();
+    // 1500ms 緩衝：正常捲動也可能觸發 touchcancel，給夠時間讓 touchstart 恢復
     this.blurTimer = setTimeout(() => {
       this.blurTimer = null;
-      this._trigger('系統手勢/AI 輔助介入');
-    }, 900);
+      // 只有在頁面確實被隱藏時才觸發（真正被系統手勢拉走）
+      if (document.hidden || !document.hasFocus()) {
+        this._trigger('系統手勢/AI 輔助介入');
+      } else {
+        // 誤觸：頁面還在前景，直接解除模糊
+        this.app.classList.remove('blur-protection');
+      }
+    }, 1500);
   }
 
   _trigger(reason) {
@@ -1025,39 +1039,61 @@ function showResult() {
 }
 
 function uploadResult(score, total) {
-  const el=document.getElementById('upload-status');
-  el.textContent='⏳ 成績上傳中…'; el.style.color='#94a3b8';
-  if(!SCRIPT_URL){el.textContent='';return;}
+  const el = document.getElementById('upload-status');
+  el.textContent = '⏳ 成績上傳中…'; el.style.color = '#94a3b8';
+  if (!SCRIPT_URL) { el.textContent = ''; return; }
 
-  fetch(SCRIPT_URL,{
-    method:'POST',
-    headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body:JSON.stringify({
-      studentName:state.studentName,
-      studentId:state.studentId,
-      studentClass:state.studentClass,
-      score,
-      correctCount:state.correctCount,
-      wrongCount:total-state.correctCount,
-      tabSwitchCount:formatViolations(state.violations),
-      ipAddress:state.ipAddr,
-      startTime:state.startTime,
-      submitTime:state.submitTime,
-      os:state.os,
-      sessionToken:state.sessionToken
+  const payload = JSON.stringify({
+    studentName:    state.studentName,
+    studentId:      state.studentId,
+    studentClass:   state.studentClass,
+    score,
+    correctCount:   state.correctCount,
+    wrongCount:     total - state.correctCount,
+    tabSwitchCount: formatViolations(state.violations),
+    ipAddress:      state.ipAddr,
+    startTime:      state.startTime,
+    submitTime:     state.submitTime,
+    os:             state.os,
+    sessionToken:   state.sessionToken
+  });
+
+  // 自動重試最多 3 次，每次間隔 3 秒
+  let attempt = 0;
+  function tryUpload() {
+    attempt++;
+    el.textContent = attempt > 1 ? `⏳ 重新上傳中（第 ${attempt} 次）…` : '⏳ 成績上傳中…';
+    el.style.color = '#94a3b8';
+
+    fetch(SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: payload
     })
-  })
-  .then(r=>r.json())
-  .then(d=>{
-    if(d.duplicate){
-      el.textContent='⚠️ 此 Session 已上傳過，防止重複提交';
-      el.style.color='#d97706';
-    } else {
-      el.textContent='✅ 成績已記錄至雲端';
-      el.style.color='#059669';
-    }
-  })
-  .catch(()=>{el.textContent='❌ 上傳失敗，請通知老師';el.style.color='#dc2626';});
+    .then(r => r.json())
+    .then(d => {
+      if (d.duplicate) {
+        el.textContent = '✅ 成績已記錄至雲端';
+        el.style.color = '#059669';
+      } else if (d.status === 'ok' || d.status === 'success') {
+        el.textContent = '✅ 成績已記錄至雲端';
+        el.style.color = '#059669';
+      } else {
+        throw new Error('server error');
+      }
+    })
+    .catch(() => {
+      if (attempt < 3) {
+        el.textContent = `⚠️ 上傳中，稍後自動重試（${attempt}/3）…`;
+        el.style.color = '#d97706';
+        setTimeout(tryUpload, 3000);
+      } else {
+        el.textContent = '❌ 上傳失敗，請通知老師手動登記（您的分數：' + score + ' 分）';
+        el.style.color = '#dc2626';
+      }
+    });
+  }
+  tryUpload();
 }
 
 // ======================================================
